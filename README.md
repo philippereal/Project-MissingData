@@ -5,7 +5,7 @@ Le répertoire Project-MissingData contient les fichiers suivants:
 
 - Le rapport au format RMarkdown: Rapport-Pima.Rmd
 
-- Le rapport au format html résultant: GRapport-Pima.html
+- Le rapport au format html résultant: Rapport-Pima.html
 
 - Le ficher des données d'origine: pima-indians-diabetes.csv (des 0 remplacent les NA)
 
