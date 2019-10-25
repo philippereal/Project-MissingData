@@ -1,0 +1,368 @@
+---
+title: "Rapport - Données manquantes"
+output:
+  html_document:
+    df_print: paged
+---
+
+#### Nom et Prénom des étudiants du groupe :
+
+```
+- Nom : Prénom : 
+- Nom : Prénom : 
+```
+
+### 1. Introduction
+
+Présentation des données et objectifs de l'étude
+
+https://www.kaggle.com/uciml/pima-indians-diabetes-database
+
+* Context
+This dataset is originally from the National Institute of Diabetes and Digestive and Kidney Diseases. The objective of the dataset is to diagnostically predict whether or not a patient has diabetes, based on certain diagnostic measurements included in the dataset. Several constraints were placed on the selection of these instances from a larger database. In particular, all patients here are females at least 21 years old of Pima Indian heritage.
+  
+* Content
+The datasets consists of several medical predictor variables and one target variable, Outcome. Predictor variables includes the number of pregnancies the patient has had, their BMI, insulin level, age, and so on.
+
+* Objectif
+Prédire si l'individu a le diabête ou pas.
+Construire un modèle dans ce but.
+Auparavant compléter les données manquante par imputation multiple.
+
+Columns
+
+npreg            : PregnanciesNumber of times pregnant
+glu              : GlucosePlasma glucose concentration a 2 hours in an oral glucose tolerance test
+bp               : BloodPressureDiastolic blood pressure (mm Hg)
+skin             : SkinThicknessTriceps skin fold thickness (mm)
+Insuline         : Insulin2-Hour serum insulin (mu U/ml)
+bmi              : BMIBody mass index (weight in kg/(height in m)^2)
+ped              : DiabetesPedigreeFunctionDiabetes pedigree function
+age              : AgeAge (years)
+type             : OutcomeClass variable (0 or 1) 268 of 768 are 1, the others are 0
+
+* Librayries
+```{r} 
+library(missMDA);
+library(mice);
+```
+
+#### Chargement des donnés - Résumé
+
+```{r} 
+data<-read.table("Pima_DataWithNA.txt",sep=";" ,header=T, na.strings = "NA")
+#View(data)
+summary(data)
+```
+
+* Traitement des données
+
+```{r} 
+#suppression de la 1er colonne (Id) et de la 6ème (Insuline)=> trop de données manquantes (peourrait être considérés dans un 2nd tps)
+tab_Pima1<-data[,-1]
+tab_Pima1<-tab_Pima1[,-5]
+data_Pima1<-as.data.frame.matrix(tab_Pima1)
+
+data_Pima1$type <- as.logical(data_Pima1$type)
+
+
+dataPima<-data_Pima1[,1:8] 
+
+#View(data_Pima1)
+```
+
+### 2. Exploration des données
+
+	https://www.kaggle.com/laozhang/statistical-learning-with-r				
+	https://www.kaggle.com/naveenkhasa/pima-indian-diabetes-dataset			
+	
+					
+**********
+
+#### Classification des données manqunates: MCAR/MNAR
+
+https://datascienceplus.com/imputing-missing-data-with-r-mice-package/
+
+Quick classification of missing data
+There are two types of missing data:
+
+MCAR: missing completely at random. This is the desirable scenario in case of missing data.
+MNAR: missing not at random. Missing not at random data is a more serious issue and in this case it might be wise to check the data gathering process further and try to understand why the information is missing. For instance, if most of the people in a survey did not answer a certain question, why did they do that? Was the question unclear?
+Assuming data is MCAR, too much missing data can be a problem too. Usually a safe maximum threshold is 5% of the total for large datasets. If missing data for a certain feature or sample is more than 5% then you probably should leave that feature or sample out. We therefore check for features (columns) and samples (rows) where more than 5% of the data is missing using a simple function
+
+
+
+```{r, include=FALSE} 
+data<-dataPima
+pMiss <- function(x){sum(is.na(x))/length(x)*100}
+apply(data,2,pMiss)
+apply(data,1,pMiss)
+```
+
+
+Using mice for looking at missing data pattern
+The mice package provides a nice function md.pattern() to get a better understanding of the pattern of missing data
+
+```{r} 
+library(mice)
+md.pattern(data)
+```
+
+A perhaps more helpful visual representation can be obtained using the VIM package as follows
+
+```{r} 
+library(VIM)
+aggr_plot <- aggr(dataPima, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(dataPima), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+
+Another (hopefully) helpful visual approach is a special box plot
+
+```{r} 
+marginplot(data[c(1,2)])
+```
+
+### 3. Imputation
+
+Dans un premier temps on traite les valeurs manquantes.
+A partir des jeux de données complétés par imputation (test de différents méthodes) simple ou multiple on construit un modèle de type logit pour la variable réponse.
+Dans notre cas Le patient est diabétique ou pas.
+
+#### 3.1 Imputation simple
+
+
+#### 3.2 Imputation multiple avec MIPCA
+
+* Détermination de la dimension de l'espace de projection
+```{r nb.kfold, echo=FALSE, include=FALSE} 
+## First the number of components has to be chosen 
+nb_Pima1 <- estim_ncpPCA(data_Pima1[,1:8])
+nb.kfold <- estim_ncpPCA(data_Pima1[,1:8], method.cv = "Kfold")
+```
+
+```{r nb.kfold_PLOT} 
+
+plot(names(nb.kfold$criterion),nb.kfold$criterion,type="b")
+
+```
+
+nb_Pima1 = 1
+nb.kfold$ncp = 5
+
+big différence!
+Les résultats sont meilleur avec 5
+
+
+```{r settings} 
+#setting des variables 
+ncp.res<-nb.kfold$ncp 
+#ncp.res<-nb_Pima1$ncp
+dataImp<-data_Pima1[,1:8] 
+dataPima<-data_Pima1[,1:8]
+```
+
+#### 3.2.1 Multiple Imputation with Bayesian method
+```{r eval=FALSE, include=FALSE} 
+## Multiple Imputation with Bayesian method
+
+res.BayesMIPCA_Pima1<-MIPCA(dataPima,ncp=ncp.res,verbose=TRUE,method.mi = "Bayes")
+```
+
+```{r eval=FALSE, include=FALSE, fig.height=10, fig.width=10}
+## Bayesian method
+plot(res.BayesMIPCA_Pima1)
+```
+En changeant le nb de dimensions : de 1 à 5 le résultat est meilleur
+Pb pour la variabble ped mais peu d'individus concernés => ped>1.5
+
+```{r eval=FALSE, include=FALSE,  fig.height=10, fig.width=10}
+## Diagnostics
+res.over_Pima1<-Overimpute(res.BayesMIPCA_Pima1)
+```
+
+#### 3.2.2 Multiple Imputation with Bayesian method et EM
+
+```{r eval=FALSE, include=FALSE}
+res.EMBayesMIPCA_Pima1<-MIPCA(dataPima,ncp=ncp.res,verbose=TRUE,method= "EM", method.mi = "Bayes")
+
+```
+
+=> pas vraiment d'améliorations
+
+```{r eval=FALSE, include=FALSE,  fig.height=10, fig.width=10}
+res.over_EMBayes_Pima1<-Overimpute(res.EMBayesMIPCA_Pima1)
+```
+
+
+#### 3.2.3 Multiple Imputation with Boost method
+
+Le résultat semble meilleur
+
+```{r eval=FALSE, include=FALSE}
+# Boost method a la place de Bayesien
+res.BootMIPCA_Pima1<-MIPCA(dataPima,ncp=ncp.res,verbose=TRUE,method.mi = "Boot")
+```
+
+
+```{r eval=FALSE, include=FALSE,  fig.height=10, fig.width=10}
+## Diagnostics
+res.overBoot_Pima1<-Overimpute(res.EMBootMIPCA_Pima1)
+```
+
+
+#### 3.2.4 Multiple Imputation with MIPCA Boost method
+Le résultat semble meilleur mais tj un peu bof
+```{r MIPCA, include=FALSE, } 
+# Boost method a la place de Bayesien
+res.EMBootMIPCA_Pima1<-MIPCA(dataPima,ncp=ncp.res,verbose=TRUE,method= "EM",method.mi = "Boot")
+```
+
+Le obtenu par boostrap et method= "EM" semble le meilleur résultat!!!! Yeaaah l'espoir rené!
+
+```{r Diagnostics, fig.height=10, fig.width=10}
+## Diagnostics
+res.overEMBoot_Pima1<-Overimpute(res.EMBootMIPCA_Pima1)
+```
+
+#### 3.3 Imputation multiple autres méthodes
+
+Finalement le MIFAMD ne semble pas approprié
+Peut-être tester d'autres méthodes du package MICE par exemple...
+
+```{r} 
+
+#res.MIFAMD_Pima1<-MIFAMD(X=dataImp, ncp = ncp.res, # method = c("Regularized", "EM"), 
+#                              coeff.ridge = 1, threshold = 1e-06,
+#       seed = NULL, maxiter = 100, nboot = 20, verbose = T)
+
+```
+
+
+
+**********
+
+### 4. Modélisation de la variable réponse
+
+Regression on the multiply imputed data set and pooling with mice
+
+
+```{r Modele} 
+dataPima<-data_Pima1[,1:8] #dataImp
+#mi<-res.BayesMIPCA_Pima1
+mi.res<-res.EMBootMIPCA_Pima1
+
+#modele1<-glm(type ~ npreg + glu + bp + skin + bmi +  ped + age, family = binomial)
+#modele2<-glm(type ~ npreg + glu + ped, family = binomial)
+
+imp_Pima1<-prelim(res.mi=mi.res,X=dataPima)#creating a mids object
+
+#MICE: with.mids Evaluate an expression in multiple imputed datasets
+fit_Pima1_m1 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + bp + skin + bmi +  ped + age,family=binomial))
+fit_Pima1_m2 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + bp + bmi +  ped + age ,family=binomial))
+fit_Pima1_m3 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + skin + bmi +  ped + age,family=binomial))
+fit_Pima1_m4 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + bmi +  ped + age,family=binomial))
+fit_Pima1_m5 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + bmi +  ped ,family=binomial))
+fit_Pima1_m6 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + bmi +  ped ,family=binomial))
+fit_Pima1_m7 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + ped ,family=binomial))
+fit_Pima1_m8 <- with(data=imp_Pima1,exp=glm(type ~ glu + ped ,family=binomial))
+
+#anova.imp <- with(data=imp_Pima1,exp=anova(lm(type ~ npreg + glu + bp + skin + bmi +  ped + age)))
+
+
+
+#res.pool_Pima1_anova<-pool(anova.imp);
+
+```
+
+#### Choix du modèle
+
+```{r} 
+anova(fit_Pima1_m4,fit_Pima1_m5)
+anova(fit_Pima1_m4,fit_Pima1_m3)
+anova(fit_Pima1_m4,fit_Pima1_m3)
+
+```
+
+
+```{r anova} 
+anova(fit_Pima1_m1,fit_Pima1_m2)
+anova(fit_Pima1_m1,fit_Pima1_m3)
+anova(fit_Pima1_m1,fit_Pima1_m4)
+anova(fit_Pima1_m1,fit_Pima1_m5)
+anova(fit_Pima1_m1,fit_Pima1_m6)
+anova(fit_Pima1_m1,fit_Pima1_m7)
+anova(fit_Pima1_m1,fit_Pima1_m8)
+anova(fit_Pima1_m6,fit_Pima1_m8)
+anova(fit_Pima1_m7,fit_Pima1_m8)
+
+```
+
+Choix du plus petit modèle?
+
+
+#### Inspecting the distribution of original and imputed data
+
+https://datascienceplus.com/imputing-missing-data-with-r-mice-package/
+
+Let’s compare the distributions of original and imputed data using a some useful plots.
+First of all we can use a scatterplot and plot Ozone against all the other variables
+
+```{r tempData} 
+tempData<-prelim(res.mi=mi.res,X=dataPima)#creating a mids object
+```
+
+```{r xyplot} 
+#xyplot(tempData,type ~ glu + ped,pch=18,cex=1)
+```
+
+
+```{r densityplot} 
+densityplot(tempData)
+```
+
+
+```{r stripplot} 
+stripplot(tempData, pch = 20, cex = 1.2)
+```
+
+#### Pooling
+
+https://datascienceplus.com/imputing-missing-data-with-r-mice-package/
+
+```{r Pooling} 
+res.pool_Pima1_m1<-pool(fit_Pima1_m1);
+res.pool_Pima1_m2<-pool(fit_Pima1_m2);
+res.pool_Pima1_m3<-pool(fit_Pima1_m3);
+res.pool_Pima1_m4<-pool(fit_Pima1_m4);
+res.pool_Pima1_m5<-pool(fit_Pima1_m5);
+res.pool_Pima1_m6<-pool(fit_Pima1_m6);
+res.pool_Pima1_m7<-pool(fit_Pima1_m7);
+res.pool_Pima1_m8<-pool(fit_Pima1_m8);
+```
+
+```{r summaryPool} 
+summary(res.pool_Pima1_m1)#pooling
+summary(res.pool_Pima1_m2)#pooling
+summary(res.pool_Pima1_m3)#pooling
+summary(res.pool_Pima1_m4)#pooling
+summary(res.pool_Pima1_m5)#pooling
+summary(res.pool_Pima1_m6)#pooling
+summary(res.pool_Pima1_m7)#pooling
+summary(res.pool_Pima1_m8)#pooling
+```
+
+
+**********
+
+
+### 5. Conclusion
+
+
+```{r} 
+```
+
+Intérêt :
+Les données Pima sont très utilsées (cf. Kaggle) pour autant il ne semble pas qu'un modèle d'inputation ait été utilisé.
+Bien souvent les données manquantes sont supprimés ou bien imputatikon simple par moyenne.
+
+
+

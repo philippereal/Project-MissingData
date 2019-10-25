@@ -1,0 +1,50 @@
+;Pima Indians Diabetes Dataset;;;;;;;;;;
+;Ces données font aussi partie du package MASS. Vue en cours glm (Feulille 2);;;;;;;;;;
+;Mais dans le package MASS les données ont été retraitées (la colonne insuline a été supprimée et les autres données lignes incomplètes aussi) ;;;;;;;;;;
+;;;;;;;;;;;
+;;;;;;;;;;;
+;;;;;;;;;;;
+;Source:;https://www.kaggle.com/uciml/pima-indians-diabetes-database;;;;;;;;;
+;;;;;;;;;;;
+;Population  ;Totale;772;;;;;;;;Exemples où on traite les données manquantes du dataset PIMA
+;;Avec NA;374;48,45%;;;;;;;
+;;;;;;;;;;;
+;Répartition des NA en fonction des catégories;;;;;;;;;;https://machinelearningmastery.com/handle-missing-data-python/
+;;Insuline;skin;glu;bp;bmi;;;;;
+;Insuline;374;227;4;"35
+(insuline 100% NA)";"10
+(bp 70%  NA / skin 90% NA)";;;;;
+;skin;227;227;0;"33
+(skin 95% NA /insuline 100% NA)";"9
+(bp 75%  NA / insuline 100% NA)";;;;;
+;glu;4;0;5;0;0;;;;;
+;bp;"35
+(insuline 100% NA)";"33
+(skin 95% NA /insuline 100% NA)";0;"35
+(insuline 100% NA)";"7
+(skin et insuline 100% NA)";;;;;
+;bmi;"10
+(bp 70%  NA / skin 90% NA)";"9
+(bp 75%  NA / insuline 100% NA)";0;"7
+(skin et insuline 100% NA)";"11
+(bp 50%  NA / skin 80% NA / insuline 90% NA)";;;;;
+;;;;;;;;;;;
+On supprime la colonne Insuline;;;;;;;;;;;
+;;;;;;;;;;;
+;Population  ;Totale;772;;;;;;;;
+;;Avec NA;231;29,92%;;;;;;;
+;;;;;;;;;;;
+;Répartition des NA en fonction des catégories (sans la colonnes insuline);;;;;;;;;;
+;;skin;glu;bp;bmi;;;;;;
+;skin;227;0;"33
+(skin 95% NA)";"9
+(bp 75%  NA)";;;;;;
+;glu;0;5;0;0;;;;;;
+;bp;"33
+(skin 95% NA)";0;"35
+";"7
+(skin 100% NA)";;;;;;
+;bmi;"9
+(bp 75%  NA)";0;"7
+(skin 100% NA)";"11
+(bp 50%  NA / skin 80% NA)";;;;;;
