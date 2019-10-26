@@ -117,7 +117,7 @@ pattern<-md.pattern(dataPima)
 
 * On marque les différentes catégories de données manquantes
 
-```{r plotRes, fig.height=10, fig.width=10}
+```{r plotRes1, fig.height=10, fig.width=10}
 ##tager les donn"es qui ont ete complétées
 # npreg          
 
@@ -584,14 +584,14 @@ barplot(res.pca.mass$eig[,2],main="Eigenvalues",names.arg=1:nrow(res.pca.mass$ei
 ```
 
 #### 2. Graphiques : nuage des individus et cercle de qualité des projections
-```{r meteoTrain_PCA0+, fig.height=7, fig.width=10,  echo=FALSE}
+```{r PCA0101, fig.height=7, fig.width=10,  echo=FALSE}
 #Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
 #color <- ifelse(dataPCA[,9] == TRUE,"#E7B800","#00AFBB")
 
 plot(res.pca, choix="var", axes=1:2,legend="Pima")
 plot(res.pca,habillage=maxDim,cex=0.6, select="cos2 0.7", axes = 1:2)
 ```
-```{r meteoTrain_PCA0+, fig.height=7, fig.width=10,  echo=FALSE}
+```{r PCA0+, fig.height=7, fig.width=10,  echo=FALSE}
 #Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
 #color <- ifelse(dataPCA[,9] == TRUE,"#E7B800","#00AFBB")
 
