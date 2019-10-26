@@ -381,12 +381,13 @@ corrplot(mcor_mice, type="upper",tl.col="black", tl.srt=8)
 
 * Inspecting the distribution of original and imputed data avec MICE
 
+
 * Inspecting the distribution of original and imputed data avec MIPCA
 
 Let’s compare the distributions of original and imputed data using a some useful plots.
 First of all we can use a scatterplot and plot Ozone against all the other variables
 
-```{r tempData} 
+```{r tempData, echo=FALSE} 
 dataPima_NA<-data_Pima1[,1:maxDim]
 #mi<-res.BayesMIPCA_Pima1
 mi.res<-res.EMBootMIPCA_Pima1
@@ -401,7 +402,7 @@ tempData_MIPCA<-prelim(res.mi=mi.res,X=dataPima_NA)#creating a mids object
 #tempData_MIPCA<-prelim(res.mi=mi.res,X=frameData_MIPCA)#creating a mids object
 ```
 
-```{r densityplot} 
+```{r densityplot, eval=FALSE} 
 ##ne semble pas fonctionner? pb de la conversion vers mice?
 xyplot(tempData_MIPCA, type ~ npreg + glu + bp + skin + bmi +  ped + age, pch=18,cex=1)
 densityplot(tempData_MIPCA)
@@ -557,7 +558,7 @@ Bien souvent les données manquantes sont supprimés ou bien imputatikon simple 
 
 ## Annexes
 
-### Annexe 1 : Analyse PCA - comparaison aux données
+### Annexe 1 : Analyse PCA - comparaison aux données non traitées 
 ```{r PCA, echo=FALSE, fig.height=10, fig.width=10}
 ## Diagnostics
 dataPCA<-res.EMBootMIPCA_Pima1$res.imputePCA
@@ -589,7 +590,7 @@ barplot(res.pca.mass$eig[,2],main="Eigenvalues",names.arg=1:nrow(res.pca.mass$ei
 #color <- ifelse(dataPCA[,9] == TRUE,"#E7B800","#00AFBB")
 
 plot(res.pca, choix="var", axes=1:2,legend="Pima")
-plot(res.pca,habillage=maxDim,cex=0.6, select="cos2 0.7", axes = 1:2)
+#plot(res.pca,habillage=maxDim,cex=0.6, select="cos2 0.7", axes = 1:2)
 ```
 ```{r PCA0+, fig.height=7, fig.width=10,  echo=FALSE}
 #Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
