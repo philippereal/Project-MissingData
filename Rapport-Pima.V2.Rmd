@@ -43,6 +43,7 @@ type             : OutcomeClass variable (0 or 1) 268 of 768 are 1, the others a
 
 * Librayries
 ```{r echo=FALSE} 
+#install.packages("corrplot")
 library(missMDA);
 library(mice);
 library(VIM)
@@ -73,7 +74,7 @@ data_Pima1<-as.data.frame.matrix(tab_Pima1)
 data_Pima1$type <- as.logical(data_Pima1$type)
 
 dataPima<-data_Pima1[,1:maxDim] 
-
+summary(dataPima)
 #View(data_Pima1)
 ```
 
@@ -83,9 +84,6 @@ dataPima<-data_Pima1[,1:maxDim]
 
 	https://www.kaggle.com/laozhang/statistical-learning-with-r				
 	https://www.kaggle.com/naveenkhasa/pima-indian-diabetes-dataset			
-	`
-
-
 
 #### Classification des données manqunates: MCAR/MNAR
 
@@ -111,22 +109,89 @@ apply(data,1,pMiss)
 Using mice for looking at missing data pattern
 The mice package provides a nice function md.pattern() to get a better understanding of the pattern of missing data
 
-```{r fig.width=10}
+```{r}
 library(mice)
-md.pattern(data)
+pattern<-md.pattern(dataPima)
+
 ```
+
+* On marque les différentes catégories de données manquantes
+
+```{r plotRes, fig.height=10, fig.width=10}
+##tager les donn"es qui ont ete complétées
+# npreg          
+
+glu.na<-dataPima[is.na(dataPima$glu),0]
+bp.na<-dataPima[is.na(dataPima$bp),0]
+skin.na<-dataPima[is.na(dataPima$skin),0] 
+bmi.na<-dataPima[is.na(dataPima$bmi),0]
+
+skin.only <- as.data.frame(dataPima[is.na(dataPima$skin) & !is.na(dataPima$bp) & !is.na(dataPima$bmi),0])
+skin.bp <-  as.data.frame(dataPima[is.na(dataPima$skin) & is.na(dataPima$bp) & !is.na(dataPima$bmi),0])
+skin.bmi <-  as.data.frame(dataPima[is.na(dataPima$skin) & !is.na(dataPima$bp) & is.na(dataPima$bmi),0])
+skin.bp.bmi<-  as.data.frame(dataPima[is.na(dataPima$skin) & is.na(dataPima$bp) & is.na(dataPima$bmi),0])
+bp.only<-  as.data.frame(dataPima[!is.na(dataPima$skin) & is.na(dataPima$bp) & !is.na(dataPima$bmi),0])
+bmi.only<-  as.data.frame(dataPima[!is.na(dataPima$skin) & !is.na(dataPima$bp) & is.na(dataPima$bmi),0])
+glu.only<-  as.data.frame(dataPima[is.na(dataPima$glu),0])
+
+dim(skin.only)[1] 
+dim(skin.bp)[1] 
+dim(skin.bmi)[1]
+dim(skin.bp.bmi)[1]
+dim(bp.only)[1]
+dim(bmi.only)[1]
+dim(glu.only)[1]
+
+nb.rows<-dim(dataPima)[1]
+
+missingCateg <- replicate(nb.rows, 0)
+dataPima.MissingCateg <- cbind(dataPima,missingCateg)
+colCateg<-9
+dataPima.MissingCateg$missingCateg <- as.integer(dataPima.MissingCateg$missingCateg)
+
+#dataFramePima<-as.data.frame(dataPCA)
+
+
+set_categ<-function(data,index,categ,colCateg)
+{
+  size<-dim(index)
+  for(i in 1:size)
+  {
+    data[index[i,0],9]<-1;
+  }
+  #return (data);
+}
+#set_categ(dataPima.MissingCateg,skin.only,1,9)
+
+#p<-skin.only[1,0]
+#  dataPima.MissingCateg[p,9]
+  
+#dataPima.MissingCateg<-set_categ(dataPima.MissingCateg,skin.only[,0],1,9)
+#dataPima.MissingCateg<-set_categ(dataPima.MissingCateg,skin.bp,2,9)
+#dataPima.MissingCateg<-set_categ(dataPima.MissingCateg,skin.bmi,3,9)
+#dataPima.MissingCateg<-set_categ(dataPima.MissingCateg,skin.bp.bmi,4,9)
+#dataPima.MissingCateg<-set_categ(dataPima.MissingCateg,bp.only,5,9)
+#dataPima.MissingCateg<-set_categ(dataPima.MissingCateg,bmi.only,6,9)
+#dataPima.MissingCateg<-set_categ(dataPima.MissingCateg,glu.only,7,9)
+
+
+```
+
 
 A perhaps more helpful visual representation can be obtained using the VIM package as follows
 
 ```{r} 
 library(VIM)
-aggr_plot <- aggr(dataPima, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(dataPima), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+aggr_plot <- aggr(dataPima, col=c('grey','black'), numbers=TRUE, sortVars=TRUE, labels=names(dataPima), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
 ```
 
 Another (hopefully) helpful visual approach is a special box plot
 
 ```{r} 
+par(mfrow=c(1,2))
 marginplot(data[c(4,5)])
+marginplot(data[c(7,5)])
+#marginplot(data[c(5,8)])
 ```
 
 ### 3. Imputation
@@ -136,7 +201,6 @@ A partir des jeux de données complétés par imputation (test de différents m�
 Dans notre cas Le patient est diabétique ou pas.
 
 #### 3.1 Imputation simple
-
 
 #### 3.2 Imputation multiple avec MIPCA
 
@@ -227,7 +291,7 @@ res.overBoot_Pima1<-Overimpute(res.EMBootMIPCA_Pima1)
 res.EMBootMIPCA_Pima1<-MIPCA(dataPima,ncp=ncp.res,verbose=TRUE,method= "EM",method.mi = "Boot")
 ```
 
-Le obtenu par boostrap et method= "EM" semble le meilleur résultat!!!! Yeaaah l'espoir rené!
+Le obtenu par boostrap et method= "EM" semble le meilleur résultat
 
 ```{r Diagnostics, fig.height=10, fig.width=10}
 ## Diagnostics
@@ -237,38 +301,6 @@ res.overEMBoot_Pima1<-Overimpute(res.EMBootMIPCA_Pima1)
 ```{r plotRes, fig.height=10, fig.width=10}
 ## Diagnostics
 plot(res.EMBootMIPCA_Pima1)
-```
-
-```{r plotRes, fig.height=10, fig.width=10}
-##tager les donn"es qui ont ete complétées
-which(dataPima[,4]="NA")
-```
-
-* Inspecting the distribution of original and imputed data
-
-Let’s compare the distributions of original and imputed data using a some useful plots.
-First of all we can use a scatterplot and plot Ozone against all the other variables
-
-```{r tempData} 
-dataPima_NA<-data_Pima1[,1:maxDim]
-#mi<-res.BayesMIPCA_Pima1
-mi.res<-res.EMBootMIPCA_Pima1
-
-tempData_MIPCA<-prelim(res.mi=mi.res,X=dataPima_NA)#creating a mids object
-#help("prelim")
-#data_MIPCA<-res.EMBootMIPCA_Pima1$res.imputePCA
-#DataMat=data.matrix(data_MIPCA)
-#frameData_MIPCA<-as.data.frame(data_MIPCA)
-#frameData_MIPCA$type <- as.logical(frameData_MIPCA$type)
-
-#tempData_MIPCA<-prelim(res.mi=mi.res,X=frameData_MIPCA)#creating a mids object
-```
-
-```{r densityplot} 
-xyplot(tempData_MIPCA, type ~ npreg + glu + bp + skin + bmi +  ped + age, pch=18,cex=1)
-densityplot(tempData_MIPCA)
-stripplot(tempData_MIPCA, pch = 20, cex = 1.2)
-
 ```
 
 
@@ -295,27 +327,36 @@ summary(tempData)
 completedData_mice <- complete(tempData,1)
 xyplot(tempData,type ~ npreg + glu + bp + skin + bmi +  ped + age,pch=18,cex=1)
 densityplot(tempData)
-stripplot(tempData_MIPCA, pch = 20, cex = 1.2)
+stripplot(tempData, pch = 20, cex = 1.2)
 
 ```
 
-#### 4.Comparaison données complétées aux données de la librairie MASS (sous échantillon)
+#### 3.4 Remarques : 
+* Comparaison des données complétées (par MIPCA et mice) aux données de la librairie MASS (sous échantillon) - Etude des Correlation
 
 ```{r, echo=FALSE} 
-View(dataFramePima)
+library("MASS")
+dataPima.tr<-data(Pima.tr)
+#View(dataFramePima)
 dataPCA<-res.EMBootMIPCA_Pima1$res.imputePCA
 #DataMat=data.matrix(dataPCA)
 dataFramePima<-as.data.frame(dataPCA)
 dataFramePima$type <- as.logical(dataFramePima$type)
+
+#1 individus le 685 a skin<0 et  bmi <0 ? => pourquoi?
+#1 individu le 454 a skin <0
+#dataFramePima[dataFramePima$skin<0,]
+#dataFramePima[dataFramePima$bmi<0,]
+# => on les supprime
+dataFramePima<-dataFramePima[-685,]
+dataFramePima<-dataFramePima[-454,]
 
 summary(dataFramePima)
 summary(completedData_mice)
 summary(Pima.tr)
 ```
 
-##### Etude des Correlations
-
-Correlations très voisines, tendance à baisser pour les données imputés (sauf pour corr bmi / skin )
+Les correlations très voisines, tendance à baisser pour les données imputés (sauf pour corr bmi / skin )
 La structure globale des corrélations est très voisine.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -333,116 +374,51 @@ DataMat.mass=data.matrix(Pima.tr)
 mcor.mass<-cor(DataMat.mass)
 corrplot(mcor.mass, type="upper",  tl.col="black", tl.srt=8)
 
-
 DataMat_mice=data.matrix(completedData_mice)
 mcor_mice<-cor(completedData_mice)
 corrplot(mcor_mice, type="upper",tl.col="black", tl.srt=8)
 ```
 
+* Inspecting the distribution of original and imputed data avec MICE
 
-```{r PCA, echo=FALSE, fig.height=10, fig.width=10}
-## Diagnostics
-dataPCA<-res.EMBootMIPCA_Pima1$res.imputePCA
-res.pca<-PCA(dataPCA,graph=FALSE, quali.sup = maxDim) 
-summary(res.pca) 
+* Inspecting the distribution of original and imputed data avec MIPCA
+
+Let’s compare the distributions of original and imputed data using a some useful plots.
+First of all we can use a scatterplot and plot Ozone against all the other variables
+
+```{r tempData} 
+dataPima_NA<-data_Pima1[,1:maxDim]
+#mi<-res.BayesMIPCA_Pima1
+mi.res<-res.EMBootMIPCA_Pima1
+
+tempData_MIPCA<-prelim(res.mi=mi.res,X=dataPima_NA)#creating a mids object
+#help("prelim")
+#data_MIPCA<-res.EMBootMIPCA_Pima1$res.imputePCA
+#DataMat=data.matrix(data_MIPCA)
+#frameData_MIPCA<-as.data.frame(data_MIPCA)
+#frameData_MIPCA$type <- as.logical(frameData_MIPCA$type)
+
+#tempData_MIPCA<-prelim(res.mi=mi.res,X=frameData_MIPCA)#creating a mids object
 ```
 
+```{r densityplot} 
+##ne semble pas fonctionner? pb de la conversion vers mice?
+xyplot(tempData_MIPCA, type ~ npreg + glu + bp + skin + bmi +  ped + age, pch=18,cex=1)
+densityplot(tempData_MIPCA)
+stripplot(tempData_MIPCA, pch = 20, cex = 1.2)
 
-```{r PCA_MASS, echo=FALSE, fig.height=10, fig.width=10}
-## Diagnostics
-library("MASS")
-dataPima.tr<-data(Pima.tr)
-#data(Pima.te)
-
-res.pca.mass<-PCA(Pima.tr,graph=FALSE, quali.sup = 8) 
-summary(res.pca.mass) 
 ```
-
-```{r PCA011, echo=FALSE, fig.width=10}
-barplot(res.pca$eig[,2],main="Eigenvalues",names.arg=1:nrow(res.pca$eig))
-
-barplot(res.pca.mass$eig[,2],main="Eigenvalues",names.arg=1:nrow(res.pca.mass$eig))
-```
-
-
-```{r meteoTrain_PCA0+, fig.height=7, fig.width=10,  echo=FALSE}
-#Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
-#color <- ifelse(dataPCA[,9] == TRUE,"#E7B800","#00AFBB")
-
-plot(res.pca, choix="var", axes=1:2,legend="Pima")
-plot(res.pca,habillage=maxDim,cex=0.6, select="cos2 0.7", axes = 1:2)
-```
-```{r meteoTrain_PCA0+, fig.height=7, fig.width=10,  echo=FALSE}
-#Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
-#color <- ifelse(dataPCA[,9] == TRUE,"#E7B800","#00AFBB")
-
-plot(res.pca.mass, choix="var", axes=1:2,legend="Pima")
-plot(res.pca.mass,habillage=8,cex=0.6, select="cos2 0.7", axes = 1:2)
-```
-
-### 4.2 Analyses automatiques
-
-#### 4.2.1 coefficients de corrélation entre chacunes des variables et les 5 premières composantes principales 
-(ce qui correspond aux coordonnées des individus sur les 5 premiers axes)
-
-##### A partir de la fonction dimdesc
-
-```{r 4.2.1, fig.height=15, fig.width=10, include=TRUE}
-dimdesc <- dimdesc(res.pca, proba=1e-5) #, nbelements = 16)
-dimdesc
-```
-
-##### Graphique de corrélation avec corrplot
-
-```{r PCAcor_var_dim1, echo=FALSE, fig.height=5, fig.width=8, message=FALSE, warning=FALSE}
-cor_var_dim<-round(res.pca$var$coord[,1:5],2) 
-cor_var_dim.mass<-round(res.pca.mass$var$coord[,1:5],2) 
-cor_var_dim
-cor_var_dim.mass
-
-corrplot(cor_var_dim, is.corr = FALSE, tl.col="black", tl.srt=maxDim)
-corrplot(cor_var_dim.mass, is.corr = FALSE, tl.col="black", tl.srt=8)
-```
-
-
-#### 4.2.2 Indice de qualité de la représentation cos2
-
-```{r cos2_var_dim1, echo=FALSE, message=FALSE, warning=FALSE}
-cos2_var_dim<-round(res.pca$var$cos2[,1:5],2) 
-cos2_var_dim.mass<-round(res.pca.mass$var$cos2[,1:5],2) 
-cos2_var_dim
-cos2_var_dim.mass
-corrplot(cos2_var_dim, is.corr = FALSE, method="circle", tl.col="black", tl.srt=maxDim)
-corrplot(cos2_var_dim.mass, is.corr = FALSE, method="circle", tl.col="black", tl.srt=8)
-```
-
-
-#### 4.2.3 contribution des variables à la construction des axes
-
-```{r PCAcontrib_var_dim2, echo=FALSE}
-contrib_var_dim<-round(res.pca$var$contrib[,1:5],2) 
-contrib_var_dim.mass<-round(res.pca.mass$var$contrib[,1:5],2) 
-
-contrib_var_dim
-contrib_var_dim.mass
-corrplot(contrib_var_dim, is.corr = FALSE, tl.col="black", tl.srt=maxDim)
-corrplot(contrib_var_dim.mass, is.corr = FALSE, tl.col="black", tl.srt=8)
-```
-
-**********
 
 ### 4. Modélisation de la variable réponse
+A partir des données complétés.
+Le modèle de la variable réponse: "Individus diabétique" (variable "type" : Yes/No) est un modèle logit. Regression linéaire généralisé sur les variables explicatives: npreg + glu + bp + skin + bmi +  ped + age
 
 Regression on the multiply imputed data set and pooling with mice
-
 
 ```{r Modele} 
 dataPima<-data_Pima1[,1:maxDim] #dataImp
 #mi<-res.BayesMIPCA_Pima1
 mi.res<-res.EMBootMIPCA_Pima1
-
-#modele1<-glm(type ~ npreg + glu + bp + skin + bmi +  ped + age, family = binomial)
-#modele2<-glm(type ~ npreg + glu + ped, family = binomial)
 
 imp_Pima1<-prelim(res.mi=mi.res,X=dataPima)#creating a mids object
 
@@ -455,24 +431,11 @@ fit_Pima1_m5 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + bmi +  ped ,fam
 fit_Pima1_m6 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + bmi +  ped ,family=binomial))
 fit_Pima1_m7 <- with(data=imp_Pima1,exp=glm(type ~ npreg + glu + ped ,family=binomial))
 fit_Pima1_m8 <- with(data=imp_Pima1,exp=glm(type ~ glu + ped ,family=binomial))
-
 #anova.imp <- with(data=imp_Pima1,exp=anova(lm(type ~ npreg + glu + bp + skin + bmi +  ped + age)))
 
-
-
-#res.pool_Pima1_anova<-pool(anova.imp);
-
 ```
 
-#### Choix du modèle
-
-```{r} 
-anova(fit_Pima1_m4,fit_Pima1_m5)
-anova(fit_Pima1_m4,fit_Pima1_m3)
-anova(fit_Pima1_m4,fit_Pima1_m3)
-
-```
-
+#### Choix du modèle - anova
 
 ```{r anova} 
 anova(fit_Pima1_m1,fit_Pima1_m2)
@@ -484,7 +447,6 @@ anova(fit_Pima1_m1,fit_Pima1_m7)
 anova(fit_Pima1_m1,fit_Pima1_m8)
 anova(fit_Pima1_m6,fit_Pima1_m8)
 anova(fit_Pima1_m7,fit_Pima1_m8)
-
 ```
 
 Choix du plus grand modèle?
@@ -527,15 +489,13 @@ summary(m_sature)
 ```{r eval=FALSE}
 library(MASS)
 modele_step_BwdFwd_AIC <- step(m_sature, data=dataFramePima, direction="both")
-summary(modele_step_BwdFwd_AIC)
-help("step")
+#help("step")
 ```
 
 * Critère BIC
 ```{r eval=FALSE}
 K<-log(dim(dataFramePima)[1])
 m_StepBwdFwd_BIC <- step(m_sature, data=dataFramePima, direction="both",k=K)
-summary(m_StepBwdFwd_BIC)
 #help("step")
 ```
 
@@ -543,10 +503,12 @@ summary(m_StepBwdFwd_BIC)
 ##### Choix du modèle - Modèle obtenu
 ```{r include=TRUE}
 modele_step_BwdFwd_AIC<-glm(formula = type ~ (npreg + glu + bp + skin + bmi + ped + age), family = binomial, data = dataFramePima)
+summary(modele_step_BwdFwd_AIC)
 AIC(modele_step_BwdFwd_AIC)
 BIC(modele_step_BwdFwd_AIC)
 
 m_StepBwdFwd_BIC<-glm(formula = type ~ (npreg + glu + skin + ped),family = binomial, data = dataFramePima)
+summary(m_StepBwdFwd_BIC)
 AIC(m_StepBwdFwd_BIC)
 BIC(m_StepBwdFwd_BIC)
 
@@ -584,12 +546,106 @@ summary(res.pool_Pima1_m8)#pooling
 
 
 
-
-
 **********
 
 
 ### 5. Conclusion
+
+Intérêt :
+Les données Pima sont très utilsées (cf. Kaggle) pour autant il ne semble pas qu'un modèle d'inputation ait été utilisé.
+Bien souvent les données manquantes sont supprimés ou bien imputatikon simple par moyenne.
+
+## Annexes
+
+### Annexe 1 : Analyse PCA - comparaison aux données
+```{r PCA, echo=FALSE, fig.height=10, fig.width=10}
+## Diagnostics
+dataPCA<-res.EMBootMIPCA_Pima1$res.imputePCA
+res.pca<-PCA(dataPCA,graph=FALSE, quali.sup = maxDim) 
+summary(res.pca) 
+```
+
+
+```{r PCA_MASS, echo=FALSE, fig.height=10, fig.width=10}
+## Diagnostics
+library("MASS")
+dataPima.tr<-data(Pima.tr)
+#data(Pima.te)
+
+res.pca.mass<-PCA(Pima.tr,graph=FALSE, quali.sup = 8) 
+summary(res.pca.mass) 
+```
+
+#### 1. Choix du nombre d'axes
+```{r PCA011, echo=FALSE, fig.width=10}
+barplot(res.pca$eig[,2],main="Eigenvalues",names.arg=1:nrow(res.pca$eig))
+
+barplot(res.pca.mass$eig[,2],main="Eigenvalues",names.arg=1:nrow(res.pca.mass$eig))
+```
+
+#### 2. Graphiques : nuage des individus et cercle de qualité des projections
+```{r meteoTrain_PCA0+, fig.height=7, fig.width=10,  echo=FALSE}
+#Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
+#color <- ifelse(dataPCA[,9] == TRUE,"#E7B800","#00AFBB")
+
+plot(res.pca, choix="var", axes=1:2,legend="Pima")
+plot(res.pca,habillage=maxDim,cex=0.6, select="cos2 0.7", axes = 1:2)
+```
+```{r meteoTrain_PCA0+, fig.height=7, fig.width=10,  echo=FALSE}
+#Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
+#color <- ifelse(dataPCA[,9] == TRUE,"#E7B800","#00AFBB")
+
+plot(res.pca.mass, choix="var", axes=1:2,legend="Pima")
+plot(res.pca.mass,habillage=8,cex=0.6, select="cos2 0.7", axes = 1:2)
+```
+
+
+#### 3. coefficients de corrélation entre chacunes des variables et les 5 premières composantes principales 
+(ce qui correspond aux coordonnées des individus sur les 5 premiers axes)
+##### A partir de la fonction dimdesc
+
+```{r 4.2.1, fig.height=15, fig.width=10, include=TRUE}
+dimdesc <- dimdesc(res.pca, proba=1e-5) #, nbelements = 16)
+dimdesc
+```
+
+##### Graphique de corrélation avec corrplot
+
+```{r PCAcor_var_dim1, echo=FALSE, fig.height=5, fig.width=8, message=FALSE, warning=FALSE}
+cor_var_dim<-round(res.pca$var$coord[,1:5],2) 
+cor_var_dim.mass<-round(res.pca.mass$var$coord[,1:5],2) 
+cor_var_dim
+cor_var_dim.mass
+
+corrplot(cor_var_dim, is.corr = FALSE, tl.col="black", tl.srt=maxDim)
+corrplot(cor_var_dim.mass, is.corr = FALSE, tl.col="black", tl.srt=8)
+```
+
+#### 4. Indice de qualité de la représentation cos2
+
+```{r cos2_var_dim1, echo=FALSE, message=FALSE, warning=FALSE}
+cos2_var_dim<-round(res.pca$var$cos2[,1:5],2) 
+cos2_var_dim.mass<-round(res.pca.mass$var$cos2[,1:5],2) 
+cos2_var_dim
+cos2_var_dim.mass
+corrplot(cos2_var_dim, is.corr = FALSE, method="circle", tl.col="black", tl.srt=maxDim)
+corrplot(cos2_var_dim.mass, is.corr = FALSE, method="circle", tl.col="black", tl.srt=8)
+```
+
+
+#### 5. Contribution des variables à la construction des axes
+
+```{r PCAcontrib_var_dim2, echo=FALSE}
+contrib_var_dim<-round(res.pca$var$contrib[,1:5],2) 
+contrib_var_dim.mass<-round(res.pca.mass$var$contrib[,1:5],2) 
+
+contrib_var_dim
+contrib_var_dim.mass
+corrplot(contrib_var_dim, is.corr = FALSE, tl.col="black", tl.srt=maxDim)
+corrplot(contrib_var_dim.mass, is.corr = FALSE, tl.col="black", tl.srt=8)
+```
+
+**********
 
 
 ```{r} 
@@ -601,3 +657,8 @@ Bien souvent les données manquantes sont supprimés ou bien imputatikon simple 
 
 
 
+
+
+
+
+### Annexe 2
