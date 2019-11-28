@@ -1,0 +1,975 @@
+---
+title: "Rapport - Données manquantes"
+output:
+  html_document:
+    df_print: paged
+  toc : yes 
+  pdf_document: default
+---
+
+#### Nom et Prénom des étudiants du groupe :
+
+```
+- Nom : Prénom : REAL Philippe
+- Nom : Prénom : GUYONVARCH Alexis
+```
+
+### 1. Introduction
+
+Présentation des données et objectifs de l'étude
+https://www.kaggle.com/uciml/pima-indians-diabetes-database
+
+#### 1.1 Contexte
+
+Le jeu de données provient de l'Institut national du diabete, des maladies digestives et rénales. Il rend possible la prédiction de la pathologie, en l'espèce le diabète, pour le patient  à partir d'analyses inclues dans le jeu de données. Dans l'extraction, les patients sont des femmes et issues de la commmunauté des indiens Pima.
+
+#### 1.2 Description des colonnes
+
+* npreg            : Number of times pregnant - Nombre de grossesses
+* glu              : GlucosePlasma 2 hours in an oral glucose tolerance test - Concentration de glucose dans le sang
+* bp               : BloodPressureDiastolic - Pression sanguine (mm Hg)
+* skin             : SkinThicknessTriceps - Epaisseur de la peau (mm)
+* Insuline         : Insulin 2- Hour serum insuline - Taux d'insuline présent dans le sang (mu U/ml)
+* bmi              : BMIBody mass index - Indice de masse corporelle (poids en kg/(taille en m)élevée au carré)
+* ped              : Diabetes Pedigree Function Diabetes pedigree function - Antécédent de diabète sucrégénétique
+* age              : Age (years)
+* type             : Outcome Class variable - Variable réponse binaire (0/1)
+
+#### 1.3 Objectifs
+
+Objectif : prédire si l'individu a ou non le diabète. 
+Préalablement, il s'agi de compléter les données manquante par imputation.
+
+#### 1.4 Chargement des donnés - Résumé
+
+```{r, option, include=FALSE} 
+rm(list=ls())
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.retina = 2, 
+  fig.width = 10,
+  cache=TRUE, 
+  cache.lazy = FALSE)
+
+# Librairies
+library(MASS)
+library(tidyverse)
+library(missMDA)
+library(mice)
+library(VIM)
+library(FactoMineR)
+library(ggplot2)
+library(factoextra)
+library(corrplot)
+library(ggplot2)
+library(GGally) 
+library(leaps)
+library(psych)
+library(sampSurf)
+```
+
+```{r, import, echo=FALSE}
+#setwd("D:/R exercices/DONNEES MANQUANTES/Projet")
+data<-read.table(file="Pima_DataWithNA.txt",sep=";" ,header=T, na.strings = "NA")
+# Description du jeu de données
+describe(data[,-1])
+# Elements de cadrage sur les données manquantes
+
+pMiss <- function(x){round(sum(is.na(x))/length(x)*100,digits=1)}
+stat.miss <- apply(data[,-1],2,pMiss)
+print('Pourcentage de données manquantes par variable')
+#print('-----------------------------------------------------------------------------')
+stat.miss
+```
+<div style="page-break-after: always;"></div>
+* Traitement des données
+
+Suppression de la 1ère colonne comprenant les identifants.
+La colonne insuline est, dans l'immédiat, conservée en dépit de la part importante de données manquantes : 48.7 %.
+
+```{r message=FALSE, warning=FALSE, traitement,echo=FALSE}
+
+tab_Pima1<-data[,-1]
+#tab_Pima1<-tab_Pima1[,-5]# La colonne insuline est dans l'immédiat conservée
+maxDim<-9 #8 si on décide de supprimer la colonne insuline
+data_Pima1<-as.data.frame.matrix(tab_Pima1)
+data_Pima1$type <- as.logical(data_Pima1$type)
+dataPima<-data_Pima1[,1:maxDim]
+dataPima<- as.data.frame(dataPima)
+
+describe(dataPima[,-9])
+
+```
+
+* Les différentes catégories de données manquantes sont "taguées" en vue d'analyses ultérieures.
+La description deux à deux des patterns est effectuée avec avec la fonction md.pairs() du package mice qui nous permet déjà de mettre en lumière les 10 combinaisons du jeu de données parmi les 28 possibles.
+
+```{r, tags, warning=F, message=F,echo=FALSE}
+
+##Tager des données qui seront ultérieurement complétées
+attach(dataPima)
+comb.miss <- md.pairs(dataPima[,2:6])
+print("Combinaisons 2 à 2 des données manquantes")
+comb.miss$mm
+
+glu.na <- row.names(dataPima[is.na(glu),0])
+bp.na<-row.names(dataPima[is.na(bp),0])
+skin.na<-row.names(dataPima[is.na(skin),0])
+bmi.na<-row.names(dataPima[is.na(bmi),0])
+
+#Combinaisons glu
+glu.only<-  row.names(dataPima[which(is.na(glu) & !is.na(bmi) & !is.na(skin) & !is.na(bp) & !is.na(Insuline)),0])
+glu.Insuline <-  row.names(dataPima[which(is.na(glu) & is.na (Insuline)),0])
+#Combinaisons bp
+#bp.only<-  row.names(dataPima[which(is.na(bp) & !is.na(skin) & !is.na(glu) & !is.na(bmi)& !is.na(Insuline)),0]) # vide
+#bp.skin <-  row.names(dataPima[which(is.na(bp) & is.na (skin) &  !is.na(bmi) & !is.na(Insuline) & !is.na(glu)),0])# vide
+bp.Insuline <- row.names(dataPima[which(is.na(bp) & is.na (Insuline) & !is.na(skin) & !is.na(bmi) & !is.na(glu)),0])
+#bp.bmi <- row.names(dataPima[which(is.na(bp) & is.na (bmi) & !is.na(skin) & !is.na(Insuline) & !is.na(glu)),0])#vide
+bp.skin.Insuline <- row.names(dataPima[which(is.na(bp) & is.na (Insuline) & is.na(skin) & !is.na(bmi) & !is.na(glu)),0])
+#bp.skin.bmi <- row.names(dataPima[which(is.na(bp) & is.na (bmi) & is.na(skin) & !is.na(Insuline) & !is.na(glu)),0])#vide
+bp.skin.Insuline.bmi <- row.names(dataPima[which(is.na(bp) & is.na (bmi) & is.na(skin) & is.na(Insuline) & !is.na(glu)),0])
+#Combinaisons skin
+#skin.only <-row.names(dataPima[which(is.na(skin) & !is.na(bp) & !is.na(bmi) & !is.na(glu) & !is.na(Insuline)),0])#vide
+skin.Insuline<- row.names(dataPima[which(is.na(skin) & is.na(Insuline) & !is.na(bmi) & !is.na(glu) & !is.na(bp)),0])
+#skin.bmi <- row.names(dataPima[which(is.na(skin) & is.na (bmi) & !is.na(glu) & !is.na(bp) & !is.na(Insuline)),0])"vide
+skin.bmi.Insuline <- row.names(dataPima[which(is.na(skin) & is.na (bmi) & is.na(Insuline) & !is.na(bp) & !is.na(glu)),0])
+#Combinaisons bmi
+bmi.only<-  row.names(dataPima[which(is.na(bmi) & !is.na(skin) & !is.na(bp) & !is.na(glu) &  !is.na(Insuline)),0])
+bmi.Insuline<- row.names(dataPima[which(is.na(bmi) & is.na(Insuline) & !is.na(skin) & !is.na(glu) & !is.na(bp)),0])
+#Combinaisons Insuline
+Insuline.only <- row.names(dataPima[which(is.na(Insuline) & !is.na(bp) & !is.na(bmi) & !is.na(skin) & !is.na(glu)),0])
+#skin.bmi.Insuline.bp.glu <- row.names(dataPima[which(is.na(skin) & is.na (bmi) & is.na(Insuline) & is.na(bp) & is.na(glu)),0])#vide
+
+nb.rows<-nrow(dataPima)
+missingCateg <- replicate(nb.rows,0)
+dataPima.MissingCateg <- cbind(dataPima,missingCateg)
+dataPima.MissingCateg$missingCateg <- as.integer(dataPima.MissingCateg$missingCateg)
+
+data<-as.data.frame(dataPima.MissingCateg)
+
+data[Insuline.only,"missingCateg"]=1
+data[bmi.only,"missingCateg"]=2
+data[glu.only,"missingCateg"]=3
+data[bmi.Insuline,"missingCateg"]=4
+data[bp.Insuline,"missingCateg"]=5
+data[bp.skin.Insuline,"missingCateg"]=6
+data[bp.skin.Insuline.bmi,"missingCateg"]=7
+data[glu.Insuline,"missingCateg"]=8
+data[skin.Insuline,"missingCateg"]=9
+data[skin.bmi.Insuline,"missingCateg"]=10
+data$missingCateg <- factor(as.integer(data$missingCateg),levels=c(0,1,2,3,4,5,6,7,8,9,10),
+labels=c("No-Missing","Insuline.only","bmi.only","glu.only","bmi.Insuline","bp.Insuline","bp.skin.Insuline","bp.skin.Insuline.bmi","glu.Insuline","skin.Insuline","skin.bmi.Insuline"))
+
+head(data)
+print("Création des catégories de données manquantes")
+table(data$missingCateg)
+
+#mis en commentaire sinon j'ai une erreur
+#rm(list=ls()[-match("data",ls())]) #certaines variables sont necessaire par la suite (mis en commentaire)
+```
+<div style="page-break-after: always;"></div>
+### 2. Exploration des données
+
+#### 2.1 Classification des données manqunates: MCAR/MNAR
+
+##### Rapide classification de données manquantes : 
+* MCAR (missing completely at random): Donnée manquante de façon complètement aléatoire => la probabilité d’absence est la même pour toutes les observations. et ne dépend donc que de paramètres exogènes indépendants de la variable.
+* MAR  (missing at random) : Survient lorsque les données ne manquent pas de façon complètement aléatoire; la probabilité d’absence est liée à une ou plusieurs autres variables observées.
+* MNAR (missing not at random): La probabilité d’absence dépend de la variable en question.Les données MNAR induisent une perte de précision mais aussi un biais qui nécessite le recours à une analyse de sensibilité.
+
+##### Recours aux librairies MICE, MASS, VIM pour visualiser les patterns du jeu de données grâce aux fonctions fluxplot() ou aggr_plot().
+
+Le pourcentage de données manquantes est élevé, les informations sont exhaustives pour seulement 51% des individus, ce qui jusitifie le recours à l'imputation multiple.
+Le graphique des combinaisons confirme, ce qui avait déjà été mis en lumière ci-devant, à savoir la prédominance de plusieurs combinaisons : 
+* Insuline + Skin
+* Insuline + Skin + BP
+
+A elle seule, la variable Insuline, quand elle est manquante, regroupe 8 patterns. La variable skin concerne 4 patterns.
+
+Au final, il ressort que le mécanisme des données manquantes, qui concernent 5 variables du dataframe "Pima", est non-monotone, ce qui justifiera ultérieurement le recours à l'imputation multiple (joint modeling, fully conditionnal specification, ACP).
+
+La valeur d' "influx" de la variable Insuline est plus élevée que la valeur d'"influx" de la variable Skin en dépit d'une proportion plus importante de données manquantes. Cela suggère une connection plus forte aux variables observées. Une valeur d'"outflux" très faible nous indique que la variable "Insuline", ainsi que la variable "Skin", quoique dans une moindre mesure, seront potentiellement moins utiles à l'imputation des autres variables.
+
+```{r, pattern, echo=FALSE}
+aggr_plot <- aggr(data, col=c('grey','black'), numbers=TRUE, sortVars=TRUE, labels=names(data), cex.axis=.7, gap=3, ylab=c("Histogramme des données manquantes","Pattern"))
+fluxplot(data[,2:6], main="Graphique Influx/Outflux")[2:3]
+par(mfrow=c(1,2))
+#print("Nombre de patterns si Insuline manquant")
+insuline.miss<-sum(md.pattern(data[,2:6], plot =F)[, "Insuline"]== 0)
+#print("Nombre de patterns si skin manquant")
+skin.miss<-sum(md.pattern(data[,2:6], plot =F)[,"skin"]== 0)
+
+print(paste0("Nombre de patterns si Insuline manquant :", insuline.miss))
+print(paste0("Nombre de patterns si skin manquant :",skin.miss))
+rm(aggr_plot)
+
+```
+
+On reprend la méthode d'analyse PCA des données manquantes vu en cours (chap 1) et de http://factominer.free.fr/missMDA/appendix_These_Audigier.pdf
+```{r matrix_pattern, echo=FALSE}
+ library(FactoMineR)
+# Creation of a categorical data set with "o" when observed and "m" when missing
+pattern <- matrix("o",nrow=nrow(dataPima),ncol=ncol(dataPima))
+pattern[is.na(dataPima)] <- "m"
+pattern<-as.data.frame(pattern)
+dimnames(pattern) <- dimnames(dataPima)
+# MCA
+res.mca<-MCA(pattern,graph=F)
+par(mfrow=c(1,2))
+plot(res.mca,selectMod=grep("_m",rownames(res.mca$var$coord)),invisible="ind")
+matrixplot(data_Pima1,sortby=1)
+
+```
+On ne remarque pas de groupes de variables bien séparés. Peut-être une liaison skin-insuline
+
+
+<div style="page-break-after: always;"></div>
+
+* L'hypothèse MCAR semble infirmée au regard des distributions des variables Insuline et Skin comparées aux variables complètes, npreg, age et ped. A ce stade, l'hypothèse d'ignorabilité du mécanisme peut par ailleurs être maintenue. L'analyse de sensibilité nous permettra de la valider.
+Nous pouvons enfin admettre que les mécanismes des variables "Insuline" et "skin" sont proches.
+
+graphiques N°1 - Mécanismes des variables "Insuline" et "skin" (§2.1)
+
+* Distributions marginales des variables Insuline, Skin et bp avec les autres variables incomplètes
+```{r fig.height=9, fig.width=15, marginplot1,echo=FALSE}
+par(mfrow=c(3,3))
+
+#Distributions marginales des variables Insuline, Skin et bp avec les autres variables incomplètes
+marginplot(data[c(5,4)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,3)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,3)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,2)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,2)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,6)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,6)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+
+```
+
+* Distributions marginales des mêmes variables avec les variables complètes
+```{r fig.height=10, fig.width=15, marginplot2,echo=FALSE}
+par(mfrow=c(4,3))
+#Distributions marginales des mêmes variables avec les variables complètes
+marginplot(data[c(5,1)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,1)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(3,1)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,7)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,7)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(3,7)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,8)],col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,8)],col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(3,8)],col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+
+```
+<div style="page-break-after: always;"></div>
+### 3. Imputations
+
+#### 3.1 Imputations avec MICE
+
+#### 3.1.1 Imputations simples
+
+Dans un premier temps on traite les valeurs manquantes par imputation simple avec le package MICE :
+* par le biais de la méthode PMM (predictive mean matching),
+* puis au moyen d'une régression linéaire - non bayésienne - stochastique.
+
+A priori, ces imputations ne seront pas conservées en raison de la sensibilité à la spécification du modèle (pour la méthode paramétrique) et du biais souvent généré par la méthode PMM (semi paramétrique).
+
+```{r, IS, warning = F, message = FALSE}
+
+#PMM
+imp.si.pmm <- mice(data, m=1, seed = 111119, print = F)
+
+#régression stochastique avec bootstrap
+imp.si.norm <- mice(data, method = "norm.nob", m = 1, maxit = 1, print = F)
+
+```
+
+#### 3.1.2 Imputations multiples
+
+<https://datascienceplus.com/imputing-missing-data-with-r-mice-package/>
+
+Nous recourons, au cours d'une première étape, à l'imputation multiple au moyen des méthodes Joint Modeling puis Fully Conditionnal Specification.
+
+```{r, IM, warning= F, message=F}
+
+#JM
+imp.mi.jm <- mice(data, m=5, method='norm',seed=111119, print=F)
+#FCS
+imp.mi.fcs <- mice(data, m=5, seed=111119, print = F)
+
+```
+
+#### 3.1.3 Analyses des distributions
+
+* Analyse des distributions des variables observées et imputées pour les imputations simples
+
+Les graphiques montrent que les imputations par régression linéaire stochastique comportent des valeurs aberrantes, en l'espèce, des valeurs négatives pour l'épaisseur de peau et le taux d'insuline.
+Les distributions des valeurs observées et imputées sont proches, ce qui n'infirme ni ne confirme le mécanisme MAR.
+Pour les graphiques cf. [annexe N°1 - graphiques N°2 - Analyses des distributions pour les Imputations simples]. 
+
+* Analyse des distributions des variables observées et imputées pour les imputations multiples
+
+A nouveau, certaines imputations ne sont pas plausibles : avec le modèle joint les graphiques montrent des valeurs aberrantes pour l'épaisseur de peau et le taux d'insuline. S'agissant de la méthode FCS, les distributions des variables glu et bmi présentent des profils très divergents pour chacune des imputations, en raison du nombre peu élevé de données manquantes.
+Pour les graphiques cf. annexe N°1 - graphiques N°3 - Analyses des distributions pour les Imputations multiples.
+
+<div style="page-break-after: always;"></div>
+#### 3.2 Imputation multiple par les méthodes d'analyse factorielle avec MIPCA
+
+* Transformation des données
+
+Préalablement à l'étape de réduction des dimensions, nous procédons à un essai de transformation des variables visant à renforcer la linéarité des liens entre elles. Finalement, après plusieurs tentatives (log, logistic et racine carrée), seule une transformation logarithmique de la variable insuline est conservée.
+
+```{r echo=FALSE, fig.width=10, message=FALSE, plot.bivar,fig.height=10}
+#par(mfrow=c(1,2))
+#observations complètes
+ok<-complete.cases(data[,2:7])
+
+ggpairs(data[ok,1:8], title = "Graphiques des distributions bivariées")
+
+new.data <- data[,1:10] %>% mutate(log.Insuline=log(Insuline)) %>% dplyr :: select(npreg, glu, bp, skin, log.Insuline, bmi, ped, age, type, missingCateg)
+
+ggpairs(new.data[ok,1:8], title = "Graphiques des distributions bivariées - variables transformées")
+```
+
+* Détermination de la dimension de l'espace de projection
+
+Avec la méthode de validation croisée "kfold", le nombre de dimensions optimale est de 6 ou 5 selon le critère "MSEP".
+```{r echo=FALSE, fig.width=12, message=FALSE, nb.kfold, warning=F}
+par(mfrow=c(1,2))
+## 1ére étape : le nombre de dimensions axes à choisir
+
+nb.kfold<- estim_ncpPCA(data[,1:maxDim], ncp.min = 0, ncp.max = 6, method.cv = "Kfold", nbsim = 100, verbose = F)
+plot(nb.kfold$criterion~names(nb.kfold$criterion),type="b",ylab="Critère MSEP", xlab="nombre de dimensions du dataset initial")
+nb.kfold.new <- estim_ncpPCA(new.data[,1:maxDim], ncp.min = 0, ncp.max = 6, method.cv = "Kfold", nbsim = 100, verbose = F)
+plot(nb.kfold.new$criterion~names(nb.kfold$criterion),type="b",ylab="Critère MSEP", xlab="nombre de dimensions du dataset transformé")
+
+#Choix du nombre de dimensions 
+ncp.res <-nb.kfold$ncp
+print(paste0("Le nombre de dimensions retenu pour le jeu de données initial est de :", ncp.res))
+ncp.res.new <-nb.kfold.new$ncp
+print(paste0("Le nombre de dimensions retenu pour le jeu de données transformé est de :", ncp.res.new))
+
+```
+ 
+#### 3.2.1 Imputation multiple - méthode bayésienne
+
+```{r, missMDA.bayes, warning=F, fig.height=10, fig.width=10,include=FALSE}
+
+## Multiple Imputation with Bayesian method pour les deux jeux
+imp.mipca.bayes <-MIPCA(data[,1:maxDim],ncp=ncp.res,verbose=TRUE, method.mi = "Bayes")
+imp.mipca.bayes.new <-MIPCA(new.data[,1:maxDim],ncp=ncp.res.new,verbose=TRUE, method.mi = "Bayes", nboot=100)#,Lstart=0,L=1)
+
+```
+
+* Diagnostics pour l'imputation multiple - méthode bayésienne
+
+Visuellement, l'imputation de la variable insuline semble de meilleure qualité, une fois celle-ci ayant fait l'objet d'une transformation en logarithmique.
+Le nombre d'itération pour la période de burn-in Lstart et le paramètre L n'ont pas été déterminé par faute de temps en suivant la méthode proposé dans (http://factominer.free.fr/missMDA/appendix_These_Audigier.pdf)
+Or la détermination de ces paramètres joue un rôle important dans la qualité de l'algorithme Bayésien. Ceci explique peut-être le résultat moyen obtenu avec les paramètres par défaut.
+
+```{r over.missMDA.bayes.transform, echo=FALSE}
+## Diagnostics
+over.imp.mipca.bayes<-Overimpute(imp.mipca.bayes, plotvars = 1:maxDim)
+over.imp.mipca.bayes.new<-Overimpute(imp.mipca.bayes.new, plotvars = 1:maxDim)
+```
+<div style="page-break-after: always;"></div>
+#### 3.2.2 Multiple Imputation avec multiple imputation par boostrap
+
+Visuellement, le modèle semble plus en adéquation avec l'imputation multiple par bootstrap.
+```{r, missMDA.boot1, fig.height=10, fig.width=10, message=F, warning=F,include=FALSE}
+# Boost method a la place de Bayesien et diagnostics - table transformée
+imp.mipca.boot.new <-MIPCA(new.data[,1:maxDim],ncp=ncp.res.new,verbose=TRUE, method.mi = "Boot")
+```
+
+```{r, missMDA.boot2, fig.height=10, fig.width=10, message=F, warning=F,echo=FALSE}
+# Boost method a la place de Bayesien et diagnostics - table transformée
+over.imp.mipca.boot.new<-Overimpute(imp.mipca.boot.new)
+```
+<div style="page-break-after: always;"></div>
+#### 3.2.3 Multiple Imputation EM et bootstrap
+
+Cette dernière imputation semble *in fine* la plus appropriée. Plus de 90% des réimputations se situent dans l'intervalle de confiance.
+```{r message=FALSE, warning=FALSE, include=FALSE, missMDA.EM.boot1, fig.height=10}
+imp.mipca.EM.boot.new <-MIPCA(new.data[,1:maxDim],ncp=ncp.res.new,verbose=TRUE, method = "EM", method.mi = "Boot")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, missMDA.EM.boot2, fig.height=10}
+over.imp.mipca.EM.boot.new<-Overimpute(imp.mipca.EM.boot.new)
+```
+
+<div style="page-break-after: always;"></div>
+
+* Analyse des distibutions
+
+L'analyse des distributions des résultats est mise en peuvre avec les méthodes du package "MICE". L'analyse requiert une conversion préalable des objets avant manipulation des fonctions et méthodes du package.
+*In fine*, ces dernières sorties semblent confirmer le diagnostic précédent. Le meilleur modèle d'imputation semble être celui implémenté section 3.2.3.
+```{r densityplot.MIPCA,echo=FALSE} 
+#conversion en objet MICE
+conv.imp.mipca.boot.new <- prelim(imp.mipca.boot.new, new.data[1:maxDim])
+densityplot(conv.imp.mipca.boot.new, main="Densité MI avec mipca méthode=Regularized")
+conv.imp.mipca.EM.boot.new <- prelim(imp.mipca.EM.boot.new, new.data[1:maxDim])
+densityplot(conv.imp.mipca.EM.boot.new,main="Densité MI avec mipca méthode=EM")
+```
+
+<div style="page-break-after: always;"></div>
+
+### 4. Analyse de sensibilité
+
+L'analyse de sensibilité ne concerne que le modèle d'imputation multiple 
+Avec pour hyptohèse un mécanisme MAR, les imputations sont robustes à une modification des valeurs de "skin" (idem pour "Insuline").
+Seulement possible avec MICE (post traitement à la volée).
+```{r, sensibilite, fig.height=10, fig.width=10, message=F, warning=F}
+delta <- c(0,10,100)
+imp.all <- vector("list", length(delta))
+post <- mice(data[,1:8], maxit = 0)$post
+for (i in 1:length(delta)){
+  d <- delta[i]
+  cmd <- paste("imp[[j]][,i] <- imp[[j]][,i] +", d)
+  post["skin"] <- cmd
+  imp <- mice(data[,1:8], post = post, maxit = 5, m=5, seed=111119, print = F)
+  imp.all[[i]] <- imp
+}
+bwplot(imp.all[[1]])
+bwplot(imp.all[[2]])
+bwplot(imp.all[[3]])
+```
+<div style="page-break-after: always;"></div>
+
+### 5. Modélisation de la variable réponse
+
+A partir des données complétées, la variable réponse, "Individus diabétiques", est modélisée avec un modèle GLM logit avec pour prédicteurs : 
+-npreg
+-glu
+-bp
+-skin
+-Insuline
+-bmi
+-ped
+-age
+
+```{r, model.logit, warning= F, message =F }
+
+#Avec imputation MICE FCS
+diabete.insuline.glm1 <- with(data=imp.mi.fcs ,exp=glm(type ~ npreg + glu + bp + skin + Insuline + bmi +  ped + age,family=binomial(link="logit")))
+
+#Avec imputations missMDA
+diabete.insuline.glm2 <- with(data=conv.imp.mipca.boot.new ,exp=glm(type ~ npreg + glu + bp + skin + log.Insuline + bmi +  ped + age,family=binomial(link="logit")))
+
+diabete.insuline.glm <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ npreg + glu + bp + skin + log.Insuline + bmi +  ped + age,family=binomial(link="logit")))
+
+#Avec imputations missMDA mais sans la variable Insuline
+diabete.noinsuline.glm <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ npreg + glu + bp + skin + bmi +  ped + age,family=binomial(link="logit")))
+
+```
+
+```{r, model.logit.summary, warning=F, message=F} 
+summary(pool(diabete.insuline.glm2))
+summary(pool(diabete.insuline.glm))
+summary(pool(diabete.noinsuline.glm))
+```
+
+On remarque que les variables skin (pour mice), age et bp ont une p-value assez importante.
+
+* Comparaison des modèles (https://stefvanbuuren.name/mice/reference/pool.html)
+
+On accepte l'utilité de la variable "Insuline" et on conserve le modèle complet.
+p-value importante => on rejette l'influence de la variable insuline.
+```{r, model.logit.compare, warning=F, message=F} 
+
+#Rapport de vraisemblance
+pool.compare(diabete.insuline.glm, diabete.noinsuline.glm, method = "likelihood")$pvalue
+#Anova
+anova(diabete.insuline.glm,diabete.noinsuline.glm)
+```
+
+Au regard des différentes comparaisons et du test final, on conserve, tant pour la méthode d'IM FCS (package MICE) que celle utilisant l'algorithme EM et le bootstrap (package missMDA), des modèles excluant les variables :   bp et age
+
+```{r model.logit.compare.suite, warning=F, message =F,echo=FALSE} 
+#age
+diabete.insuline.noage <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ npreg + glu + bp + skin + log.Insuline + bmi +  ped ,family=binomial(link="logit")))
+mle.age<- pool.compare(diabete.insuline.glm, diabete.insuline.noage, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele complet vs modele sans la variable age : ", mle.age$pvalue))
+
+#skin
+diabete.insuline.noskin <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ npreg + glu + bp + log.Insuline + bmi +  ped + age,family=binomial(link="logit")))
+mle.skin<- pool.compare(diabete.insuline.glm, diabete.insuline.noskin, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele complet vs modele sans la variable skin : ", mle.skin$pvalue))
+
+#log(Insuline) --> déja traité
+diabete.insuline.noinsuline <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ npreg + glu + bp + skin + bmi +  ped + age,family=binomial(link="logit")))
+mle.noinsuline<- pool.compare(diabete.insuline.glm, diabete.insuline.noinsuline, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele complet vs modele sans la variable insuline : ", mle.noinsuline$pvalue))
+
+#bp
+diabete.insuline.nobp <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ npreg + glu + skin + log.Insuline + bmi +  ped + age,family=binomial(link="logit")))
+mle.bp<- pool.compare(diabete.insuline.glm, diabete.insuline.nobp, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele complet vs modele sans la variable bp : ", mle.bp$pvalue))
+
+#bmi
+diabete.insuline.nobmi <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ npreg + glu + bp + skin + log.Insuline +  ped + age,family=binomial(link="logit")))
+mle.bmi<- pool.compare(diabete.insuline.glm, diabete.insuline.nobmi, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele complet vs modele sans la variable bmi : ", mle.bmi$pvalue))
+
+#glu
+diabete.insuline.noglu <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ npreg  + bp + skin + log.Insuline + bmi + ped + age,family=binomial(link="logit")))
+mle.glu<- pool.compare(diabete.insuline.glm, diabete.insuline.noglu, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele complet vs modele sans la variable glu  : ", mle.glu$pvalue))
+
+#npreg
+diabete.insuline.nopreg <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ bp + skin + glu+ log.Insuline + bmi + ped + age,family=binomial(link="logit")))
+mle.npreg<- pool.compare(diabete.insuline.glm, diabete.insuline.nopreg, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele complet vs modele sans la variable npreg : ", mle.npreg$pvalue))
+
+#npreg
+diabete.insuline.noped <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ bp + skin + glu+ log.Insuline + bmi + npreg + age,family=binomial(link="logit")))
+mle.npreg<- pool.compare(diabete.insuline.glm, diabete.insuline.noped, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele complet vs modele sans la variable ped : ", mle.npreg$pvalue))
+
+```
+
+Toutes les variables semblent significatives, c'est le modèle complet qui a le meilleur AIC.
+A partir de ce AIC moyen on pourrait essayer de supprimer les variables : bmi, age et bp.
+
+```{r, echo = FALSE}
+############### AIC MOYEN EXTRAIT DE ANALYSES##############################
+
+AIC<-mean(sapply(diabete.insuline.glm$analyses, AIC))
+print(paste0("AIC du modele complet : ",AIC))
+
+AIC.noage<-mean(sapply(diabete.insuline.noage$analyses, AIC))
+print(paste0("AIC du modele sans la variable age : ",AIC.noage))
+
+AIC.noskin<-mean(sapply(diabete.insuline.noskin$analyses, AIC))
+print(paste0("AIC du modele sans la variable skin : ", AIC.noskin))
+
+AIC.noinsuline<-mean(sapply(diabete.insuline.noinsuline$analyses, AIC))
+print(paste0("AIC du modele sans la variable insuline : ", AIC.noinsuline))
+
+AIC.nobp<-mean(sapply(diabete.insuline.nobp$analyses, AIC))
+print(paste0("AIC du modele sans la variable bp : ", AIC.nobp))
+
+AIC.nobmi<-mean(sapply(diabete.insuline.nobmi$analyses, AIC))
+print(paste0("AIC du modele sans la variable bmi : ", AIC.nobmi))
+
+AIC.nopreg<-mean(sapply(diabete.insuline.nopreg$analyses, AIC))
+print(paste0("AIC du modele sans la variable npreg : ", AIC.nopreg))
+
+AIC.noglu<-mean(sapply(diabete.insuline.noglu$analyses, AIC))
+print(paste0("AIC du modele sans la variable glu : ", AIC.noglu))
+
+AIC.noped<-mean(sapply(diabete.insuline.noped$analyses, AIC))
+print(paste0("AIC du modele sans la variable ped : ", AIC.noped))
+
+```
+
+On regarde maintenant et l'on compare certains modèles emboîtés en supprimant successivement les variables : age, bmi et bp.
+Le meilleur modèle qui minimise le critère BIC est le modèle diabete.insuline.glm sans les variables :  bmi, age et bp
+Soit en ne conservant que les 5 variables: npreg, ped, glu, skin et log.Insuline 
+C'est aussi confirmé par les différents MLE réalisés sur les modèles emboîtés. 
+Pour argumenter ce choix on peut se référer à l'annexe 2 - choix de modèle 
+
+
+```{r AIC_Moyen,  echo = FALSE}
+
+#Au final, on teste le modèle sans les variables bmi, glu et preg
+AIC.complet<-mean(sapply(diabete.insuline.glm$analyses, AIC))
+BIC.complet<-mean(sapply(diabete.insuline.glm$analyses, BIC))
+
+diabete.insuline.glm7 <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~  npreg + glu + skin + log.Insuline + ped + bp + bmi  ,family=binomial(link="logit")))
+AIC.7<-mean(sapply(diabete.insuline.glm7$analyses, AIC))
+BIC.7<-mean(sapply(diabete.insuline.glm7$analyses, BIC))
+
+diabete.insuline.nobmi <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~  npreg + glu + skin + log.Insuline + ped + bp + age  ,family=binomial(link="logit")))
+AIC.7.nobmi<-mean(sapply(diabete.insuline.glm7$analyses, AIC))
+AIC.7.nobmi<-mean(sapply(diabete.insuline.glm7$analyses, BIC))
+
+diabete.insuline.glm6 <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~  npreg + glu + skin + log.Insuline + ped + bmi  ,family=binomial(link="logit")))
+AIC.6<-mean(sapply(diabete.insuline.glm6$analyses, AIC))
+BIC.6<-mean(sapply(diabete.insuline.glm6$analyses, BIC))
+
+diabete.insuline.glm5 <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~ npreg + glu + skin + log.Insuline + ped ,family=binomial(link="logit")))
+#diabete.insuline.glm5 <- with(data=conv.imp.mipca.EM.boot.new ,exp=glm(type ~  bmi + npreg + ped + glu + log.Insuline ,family=binomial(link="logit")))
+
+AIC.5<-mean(sapply(diabete.insuline.glm5$analyses, AIC))
+BIC.5<-mean(sapply(diabete.insuline.glm5$analyses, BIC))
+
+mle.final<- pool.compare(diabete.insuline.glm, diabete.insuline.glm7, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele complet vs modele sans la variable age : ", mle.final$pvalue))
+mle.final<- pool.compare(diabete.insuline.glm7, diabete.insuline.glm6, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele sans la variable age vs modele sans la variable age et bp: ", mle.final$pvalue))
+mle.final<- pool.compare(diabete.insuline.glm6, diabete.insuline.glm5, method = "likelihood")
+print(paste0("Test du rapport de vraisemblance modele sans la variable age et bp vs modele sans la variable age, bp et bmi: ", mle.final$pvalue))
+
+print(paste0("AIC du modele complet : ", AIC.complet))
+print(paste0("AIC du modele sans la variable age : ", AIC.7))
+print(paste0("AIC du modele sans la variable age et bp : ", AIC.6))
+print(paste0("AIC du modele sans la variable age, bp et bmi: ", AIC.5))
+
+print(paste0("BIC du modele complet : ", BIC.complet))
+print(paste0("BIC du modele sans la variable age : ", BIC.7))
+print(paste0("BIC du modele sans la variable age et bp : ", BIC.6))
+print(paste0("BIC du modele sans la variable age, bp et bmi: ", BIC.5))
+
+###############SORTIE MODELE FINAL SELECTIONNE##############################
+summary(pool(diabete.insuline.glm))
+summary(pool(diabete.insuline.glm7))
+summary(pool(diabete.insuline.glm6))
+summary(pool(diabete.insuline.glm5))
+
+```
+
+En reprenant (http://factominer.free.fr/missMDA/appendix_These_Audigier.pdf) (page 20) à propos de la sortie de la fonction pool.
+La colonne (fmi) (fraction of missing information) peut être interprété comme la part de variablilité due aux valeurs manquantes.
+De grande valeurs (>5) indique que le résultat est sensible à la méthode MI utilisée. Ici ce n'est pas le cas.
+
+```{r, include=FALSE}
+#pool(diabete.insuline.glm5)
+```
+
+```
+Class: mipo    m = 100 
+                 estimate         ubar            b            t dfcom       df        riv     lambda        fmi
+(Intercept)  -10.88502375 7.231029e-01 3.239346e-01 1.050277e+00   762 345.8641 0.45245827 0.31151206 0.31545909
+npreg          0.15107510 8.032095e-04 5.978041e-05 8.635877e-04   762 683.0321 0.07517120 0.06991556 0.07262705
+glu            0.02602838 1.685869e-05 2.779750e-06 1.966624e-05   762 574.4618 0.16653414 0.14275977 0.14572876
+skin           0.04820190 7.002272e-05 3.368601e-05 1.040456e-04   762 329.4700 0.48588328 0.32699963 0.33104812
+log.Insuline   0.90936111 2.642584e-02 1.944355e-02 4.606383e-02   762 242.1640 0.74313588 0.42632126 0.43100122
+ped            1.00577056 8.573742e-02 5.498982e-03 9.129139e-02   762 695.2185 0.06477885 0.06083784 0.06352801
+```
+
+Au final, les estimations des coefficients sont du même ordre de grandeur en comparaison de la méthode des cas concrets (= listwise deletion).
+Mais de manière général sont plus faibles. Et en particulier biensûr pour les variables à fortes données manquantes: insuline et skin.  
+
+```{r, logit.glm5-NA, warning=F, message=F,echo=FALSE}
+diabete.listwisedeletion.glm5 <- glm(type ~ npreg + glu + skin + I(log(Insuline)) + ped, data=data, family = binomial(link="logit"))
+summary(diabete.listwisedeletion.glm5)
+```
+<div style="page-break-after: always;"></div>
+
+### 6. Conclusion
+
+Dans notre cas, nous avons réussi à démontrer la pertinence de l'imputation avec pour objectif l'implémentation d'un modèle de classification.
+Les méthodes sont nombreuses et nous n'avons pas pu toutes les expérimentés. Notament les méthodes bayésiennes de mipCA en ce qui concerne la détermination des paramètres.
+Ainsi que le package AMELIA couplé avec Zelig qui n'ont pas été utilisé.
+L'analyse comparative des données complétés par imputation multiple avec les packages mice et missMDA donnent des structures similaires, lorsque l'on fait une analyse PCA (voir Annexe 2).
+
+Une question est apparue concernant l'utilisation pratique des données imputés. De nombresue méthodes R nécessite en input un datafRame ou équivalent.
+Ici les méthode utilsant du boostraping, on a pour résultat une famille de structure comparable à un dataFrame. Que faut-il faire pour se ramener à un dataFrame: utilser la moyenne? Ou par exemple dans le cas la méthode mipca utiliser la variable $res.InmputPCA c'est ce qui est fait en Annexe 2 - pour utilser les méthodes de choix de modèles et en annexe §3 pour une analyse PCA des données complétées.
+
+Les données Pima sont très utilisées (cf. Kaggle). Pour autant il ne semble pas qu'un modèle d'inputation ait été utilisé. Bien souvent les données manquantes sont supprimées (analyse des cas concrets ou listwise deletion) ou bien une imputation simple par moyenne est mise en oeuvre.
+
+<div style="page-break-after: always;"></div>
+
+## Annexes
+
+
+### Annexe 1 : Graphiques
+
+
+#### graphiques N°1 - Mécanismes des variables "Insuline" et "skin" (§2.1)
+
+* Distributions marginales des variables Insuline, Skin et bp avec les autres variables incomplètes
+```{r echo=FALSE, fig.height=9, fig.width=15}
+par(mfrow=c(3,3))
+
+#Distributions marginales des variables Insuline, Skin et bp avec les autres variables incomplètes
+marginplot(data[c(5,4)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,3)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,3)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,2)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,2)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,6)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,6)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+
+```
+
+* Distributions marginales des mêmes variables avec les variables complètes
+```{r echo=FALSE, fig.height=10, fig.width=15}
+par(mfrow=c(4,3))
+#Distributions marginales des mêmes variables avec les variables complètes
+marginplot(data[c(5,1)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,1)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(3,1)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,7)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,7)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(3,7)], col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(5,8)],col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(4,8)],col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+marginplot(data[c(3,8)],col = mdc(1:2, trans = FALSE), cex.numbers = .6)
+
+```
+
+<div style="page-break-after: always;"></div>
+#### graphiques N°2 - Analyses des distributions pour les Imputations simples (§-3.1.3)
+
+Les graphiques montrent que les imputations par régression linéaire stochastique comportent des valeurs aberrantes, en l'espèce, des valeurs négatives pour l'épaisseur de peau et le taux d'insuline.
+Les distributions des valeurs observées et imputées sont proches, ce qui n'infirme ni ne confirme le mécanisme MAR.
+
+* Imputations  simples - PMM 
+```{r echo=FALSE}
+#par(mfrow=c(2,2))
+#Imputations  simples
+#PMM
+xyplot(imp.si.pmm,Insuline ~ npreg + glu + bp + skin + bmi +  ped + age, pch=18,cex=1)
+xyplot(imp.si.pmm,skin ~ npreg + glu + bp + Insuline + bmi +  ped + age, pch=18,cex=1)
+densityplot(imp.si.pmm)
+stripplot(imp.si.pmm, pch = 20, cex = 1.2)
+
+```
+
+* Imputations  simples - Normales 
+```{r echo=FALSE}
+#par(mfrow=c(2,2))
+#Normales
+xyplot(imp.si.norm,Insuline ~ npreg + glu + bp + skin + bmi +  ped + age, pch=18,cex=1)
+xyplot(imp.si.norm,skin ~ npreg + glu + bp + Insuline + bmi +  ped + age, pch=18,cex=1)
+densityplot(imp.si.norm)
+stripplot(imp.si.norm, pch = 20, cex = 1.2)
+
+```
+
+<div style="page-break-after: always;"></div>
+#### graphiques N°3 - Analyses des distributions pour les Imputations multiples (§-3.1.3)
+A nouveau, certaines imputations ne sont pas plausibles : avec le modèle joint les graphiques montrent des valeurs aberrantes pour l'épaisseur de peau et le taux d'insuline. 
+S'agissant de la méthode FCS, les distributions des variables glu et bmi présentent des profils très divergents pour chacune des imputations, en raison du nombre peu élevé de données manquantes.
+
+* Imputations  multiples - JM 
+```{r echo=FALSE}
+#par(mfrow=c(2,2))
+#Imputations multiples
+#JM
+xyplot(imp.si.pmm,Insuline  ~ npreg + glu + bp + skin +  bmi +  ped + age, pch=18,cex=1)
+xyplot(imp.si.pmm,skin  ~ npreg + glu + bp + Insuline +  bmi +  ped + age, pch=18,cex=1)
+densityplot(imp.mi.jm)
+stripplot(imp.mi.jm, pch = 20, cex = 1.2)
+```
+
+* Imputations  multiples - FCS 
+```{r echo=FALSE}
+#FCS
+xyplot(imp.si.norm,Insuline ~ npreg + glu + bp + skin + bmi +  ped + age, pch=18,cex=1)
+xyplot(imp.si.norm, skin ~ npreg + glu + bp + Insuline + bmi +  ped + age, pch=18,cex=1)
+densityplot(imp.mi.fcs, )
+stripplot(imp.mi.fcs, pch = 20, cex = 1.2)
+```
+
+<div style="page-break-after: always;"></div>
+
+### Annexe 2 - choix de modèle
+
+Dans cette annexe on applique les techniques regsubset et step pour le choix automatique des variables. 
+Les données utilsées sont les données obtenu à partir de la variable $res.inputePCA
+On obtient à nouveau ce résultat en utilsant comme données d'input les moyennes des diffrérents jeux de données issues du boostrap résultant de mipca. 
+
+
+```{r, traite.imputedPCA, warning=F, message=F,echo=FALSE}
+res.imputePCA<-as.data.frame(imp.mipca.EM.boot.new$res.imputePCA)
+res.imputePCA <- cbind(res.imputePCA[,],data[,10]) 
+names(res.imputePCA)[9]<-"type"
+res.imputePCA$type <- as.logical(res.imputePCA$type)
+names(res.imputePCA)[10]<-"typeMissing"
+```
+
+
+```{r, traite.reasMeanPCA, warning=F, message=F,eval=FALSE, echo=FALSE}
+
+res.meanMipca<-lapply(imp.mipca.EM.boot.new$res.MI,colMeans)
+
+res.meanMipca <- cbind(res.imputePCA[,],data[,10]) 
+names(res.meanMipca)[9]<-"type"
+res.meanMipca$type <- as.logical(res.meanMipca$type)
+res.meanMipca <- cbind(res.meanMipca[,],data[,10]) 
+names(res.meanMipca)[10]<-"typeMissing"
+
+res.meanMipca<-res.meanMipca[,-13]
+res.meanMipca<-res.meanMipca[,-12]
+res.meanMipca<-res.meanMipca[,-11]
+res.meanMipca<-res.meanMipca[,-11]
+
+#res.imputePCA<-res.meanMipca
+```
+
+#### Choix du modèle - Utilisation de regsubsets 
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(leaps)
+
+choix_modele<-regsubsets(type ~ . ,int=T, nbest=1,nvmax=4,method="exhaustive",data=res.imputePCA[,1:maxDim])
+#summary(choix_modele)
+```
+
+```{r echo=FALSE, fig.height=8, fig.width=9}
+par(mfrow=c(2,2))
+plot(choix_modele,scale="r2", main="Choix de modèle - critère R2", cex.axis=0.7)
+plot(choix_modele,scale="adjr2", main="Choix de modèle - critère R2 ajusté", cex.axis=0.7)
+plot(choix_modele,scale="Cp", main="Choix de modèle - critère Cp de Mallows", cex.axis=0.7)
+plot(choix_modele,scale="bic", main="Choix de modèle - critère BIC", cex.axis=0.7)
+```
+
+La méthode step du package leaps nous fait choisir un modèle à 4 variables explicatives: npreg + glu + skin + ped
+
+#### Choix du modèle - méthode step du package MASS à partir du modèle saturé
+On reprend le modèle saturé obtenu au §2: m_sature
+```{r  include= TRUE}
+
+m_sature = glm(formula = type ~ .  ,  family = binomial(link="logit"),  data = res.imputePCA[,1:maxDim])
+summary(m_sature)
+
+```
+#### Choix du modèle - Méthode progressive - step backward-forward à partir de m_sature
+
+* Critère AIC
+```{r include=FALSE}
+library(MASS)
+modele_step_BwdFwd_AIC <- step(m_sature, data=res.imputePCA[,1:maxDim], direction="both")
+#help("step")
+```
+
+* Critère BIC
+```{r include=FALSE}
+K<-log(dim(res.imputePCA)[1])
+m_StepBwdFwd_BIC <- step(m_sature, data=res.imputePCA[,1:maxDim], direction="both",k=K)
+#help("step")
+```
+
+
+##### Choix du modèle - Modèle obtenu
+```{r include=TRUE}
+#modele_step_BwdFwd_AIC<-glm(formula = type ~ (npreg + glu + bp + skin + Insuline + bmi + ped + age), family = binomial, data = dataFramePima)
+summary(modele_step_BwdFwd_AIC)
+AIC(modele_step_BwdFwd_AIC)
+BIC(modele_step_BwdFwd_AIC)
+
+#m_StepBwdFwd_BIC<-glm(formula = type ~ (npreg + glu + skin + Insuline + ped),family = binomial, data = dataFramePima)
+summary(m_StepBwdFwd_BIC)
+AIC(m_StepBwdFwd_BIC)
+BIC(m_StepBwdFwd_BIC)
+
+```
+
+
+<div style="page-break-after: always;"></div>
+
+### Annexe 3 : Analyse PCA - comparaison aux données non traitées 
+
+
+* PCA sur les données complétées par MIPCA
+
+```{r PCA_mipca, echo=FALSE}
+
+res.pca<-PCA(res.imputePCA[,1:10],graph=FALSE, quali.sup = 9:10)
+#summary(res.pca) 
+
+```
+
+* PCA sur les données imputé par mice
+
+```{r PCA_mice, echo=FALSE}
+completedMice<-complete(imp.si.norm)
+
+res.pca.mice<-PCA(completedMice,graph=FALSE, quali.sup = 9:10)
+#summary(res.pca.mice) 
+
+```
+
+*  PCA sur les données Pima de MASS (non imputées)
+
+```{r fig.height=10, fig.width=10, PCA_MASS, echo=FALSE}
+## Diagnostics
+library("MASS")
+dataPima.tr<-data(Pima.tr)
+dataPima.te<-data(Pima.te)
+#data(Pima.te)
+dataPimaMASS <- rbind(Pima.tr,Pima.te)
+res.pca.mass<-PCA(dataPimaMASS,graph=FALSE, quali.sup = 8) 
+#summary(res.pca.mass) 
+```
+
+#### Choix du nombre d'axes
+
+```{r PCA011, echo=FALSE}
+barplot(res.pca$eig[,2],main="Eigenvalues MIPCA",names.arg=1:nrow(res.pca$eig))
+barplot(res.pca.mice$eig[,2],main="Eigenvalues mice",names.arg=1:nrow(res.pca.mice$eig))
+barplot(res.pca.mass$eig[,2],main="Eigenvalues MASS",names.arg=1:nrow(res.pca.mass$eig))
+```
+
+#### Graphiques : nuage des individus et cercle de qualité des projections
+
+* Données Pima complétées avec la méthode MIPCA du package MissMDA
+
+```{r PCA0101, echo=FALSE, fig.width=12}
+#Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
+#color <- ifelse(dataPCA[,9] == TRUE,"#E7B800","#00AFBB")
+
+plot(res.pca, choix="var", axes=1:2,legend="MIPCA")
+plot(res.pca,habillage=9,cex=0.8, select="cos2 0.7", axes = 1:2)
+plot(res.pca,habillage=10,cex=0.8, select="cos2 0.7", axes = 1:2)
+```
+
+Le nuage des individus est bien centré
+
+* Données Pima complétées avec la méthode mice du package mice
+
+```{r PCA_MICE, echo=FALSE, fig.width=10}
+#Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
+#color <- ifelse(dataPCA[,maxDim] == TRUE,"#E7B800","#00AFBB")
+
+plot(res.pca.mice, choix="var", axes=1:2,legend="MICE")
+plot(res.pca.mice,habillage=9,cex=0.8, select="cos2 0.7", axes = 1:2)
+plot(res.pca.mice,habillage=10,cex=0.8, select="cos2 0.7", axes = 1:2)
+```
+
+Dans le cas de mice toutes données sont relativement centrées.
+
+* Données Pima de la librairie MASS
+
+```{r PCA0+, echo=FALSE}
+#Graphique du nuage des individus - qualité de projection sur le plan principal > 0.7
+#color <- ifelse(dataPCA[,9] == TRUE,"#E7B800","#00AFBB")
+
+plot(res.pca.mass, choix="var", axes=1:2,legend="Pima")
+plot(res.pca.mass,habillage=8,cex=0.8, select="cos2 0.7", axes = 1:2)
+```
+
+Remarque: Les données complétés par MICE et MIPCA ont une PCA similaire.
+Par contre pour les données de MASS on a une transformation par rapport aux axes.
+Même forme mais symétrique / à l'axe principal.
+
+<div style="page-break-after: always;"></div>
+
+### Annexe 4 : Comparaison des corrélations des données complétés obtenues avec mice et missMA 
+
+A la vu des graphiques, la structure globale des corrélations est très voisine.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+require(corrplot)
+
+library(MASS)
+dataPima.tr<-data(Pima.tr)
+dataPima.te<-data(Pima.te)
+#data(Pima.te)
+dataPimaMASS <- rbind(Pima.tr,Pima.te)
+DataMat.mass=data.matrix(dataPimaMASS)
+#mcor.mass<-cor(DataMat.mass)
+#corrplot(mcor.mass, type="upper",  tl.col="black", tl.srt=8)
+
+DataMat=data.matrix(res.imputePCA[,1:maxDim])
+mcor<-cor(DataMat)
+corrplot(mcor, type="upper",tl.col="black", tl.srt=8)
+
+DataMat_mice=data.matrix(completedMice[,1:maxDim])
+mcor_mice<-cor(DataMat_mice)
+corrplot(mcor_mice, type="upper",tl.col="black", tl.srt=8)
+```
+```{r echo=FALSE, fig.height=10, fig.width=10, message=FALSE, warning=FALSE}
+pairs(res.imputePCA[,1:maxDim], pch ='.')
+
+```
+```{r echo=FALSE, fig.height=10, fig.width=10, message=FALSE, warning=FALSE}
+pairs(completedMice[,1:maxDim], pch ='.')
+
+```
+
